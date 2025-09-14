@@ -1,0 +1,715 @@
+openapi: 3.0.3
+info:
+  title: RIMAC Medical Appointment API
+  description: |
+    Sistema serverless completo de gestión de citas médicas para RIMAC.
+    
+    ## Características
+    - ✅ Procesamiento asíncrono por país (PE/CL)
+    - ✅ Actualizaciones en tiempo real con EventBridge
+    - ✅ Panel de administración con JWT
+    - ✅ Arquitectura event-driven escalable
+    - ✅ Base de datos dual: DynamoDB + RDS MySQL
+    - ✅ Dashboard con estadísticas en tiempo real
+    
+    ## Flujo del Sistema
+    1. **Cliente** crea cita → DynamoDB (pending)
+    2. **SNS/SQS** → Procesamiento por país
+    3. **Lambda específico** → RDS save (pending)
+    4. **EventBridge** → Confirmación automática
+    5. **Status update** → RDS (completed)
+    6. **Admin Dashboard** → Estadísticas en tiempo real
+    
+  version: 2.0.0
+  contact:
+    name: RIMAC API Support
+    email: api-support@rimac.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://bnh6zvyh59.execute-api.us-east-2.amazonaws.com/dev
+    description: Desarrollo
+  - url: https://api-prod.rimac.com
+    description: Producción
+
+tags:
+  - name: Appointments
+    description: Gestión de citas médicas para usuarios
+  - name: Admin
+    description: Panel de administración con autenticación JWT
+
+paths:
+  # ============= APPOINTMENTS API =============
+  /appointments:
+    post:
+      summary: Crear nueva cita médica
+      description: |
+        Crea una nueva cita médica y la procesa asíncronamente según el país.
+        
+        ## Flujo de Procesamiento
+        1. Validación de datos de entrada
+        2. Creación en DynamoDB con status "pending"
+        3. Envío a cola SNS/SQS por país
+        4. Procesamiento por Lambda específico (PE/CL)
+        5. Guardado en RDS del país correspondiente
+        6. Confirmación vía EventBridge
+        7. Actualización de status a "completed"
+        
+      operationId: createAppointment
+      tags:
+        - Appointments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAppointmentRequest'
+            examples:
+              peru:
+                summary: Cita en Perú
+                value:
+                  insuredId: "12345"
+                  scheduleId: 100
+                  countryISO: "PE"
+              chile:
+                summary: Cita en Chile
+                value:
+                  insuredId: "67890"
+                  scheduleId: 200
+                  countryISO: "CL"
+      responses:
+        '201':
+          description: Cita creada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateAppointmentResponse'
+        '400':
+          description: Error de validación
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /appointments/{insuredId}:
+    get:
+      summary: Obtener citas de un asegurado
+      description: |
+        Obtiene todas las citas médicas de un asegurado específico desde DynamoDB.
+        
+        Las citas se ordenan por fecha de creación (más recientes primero).
+      operationId: getAppointmentsByInsuredId
+      tags:
+        - Appointments
+      parameters:
+        - name: insuredId
+          in: path
+          required: true
+          description: ID del asegurado (5 dígitos)
+          schema:
+            type: string
+            pattern: '^[0-9]{5}$'
+            example: "12345"
+      responses:
+        '200':
+          description: Citas encontradas exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetAppointmentsResponse'
+        '404':
+          description: No se encontraron citas para el asegurado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ============= ADMIN API =============
+  /admin/auth:
+    post:
+      summary: Autenticación del administrador
+      description: |
+        Autentica al administrador y retorna un JWT token válido por 24 horas.
+        
+        **Credenciales de demo:**
+        - Usuario: `admin`
+        - Contraseña: `rimac2024`
+      operationId: adminAuth
+      tags:
+        - Admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminLoginRequest'
+            example:
+              username: "admin"
+              password: "rimac2024"
+      responses:
+        '200':
+          description: Autenticación exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminLoginResponse'
+        '401':
+          description: Credenciales inválidas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/stats:
+    get:
+      summary: Estadísticas del sistema
+      description: |
+        Obtiene estadísticas completas del sistema incluyendo:
+        - Total de citas por status
+        - Distribución por país (PE/CL)  
+        - Métricas de rendimiento
+        - Estado del sistema
+      operationId: getAdminStats
+      tags:
+        - Admin
+      security:
+        - AdminBearerAuth: []
+      responses:
+        '200':
+          description: Estadísticas obtenidas exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminStatsResponse'
+        '401':
+          description: Token JWT inválido o expirado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/appointments:
+    get:
+      summary: Gestión de todas las citas
+      description: |
+        Obtiene todas las citas del sistema desde RDS (PE + CL) con datos detallados:
+        - Información del médico
+        - Especialidad médica
+        - Centro médico
+        - Status actualizado
+        
+        **Limitado a 50 registros por país para performance.**
+      operationId: getAllAppointments
+      tags:
+        - Admin
+      security:
+        - AdminBearerAuth: []
+      responses:
+        '200':
+          description: Citas obtenidas exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAppointmentsResponse'
+        '401':
+          description: Token JWT inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/medics:
+    get:
+      summary: Gestión de médicos
+      description: |
+        Obtiene todos los médicos del sistema organizados por país con:
+        - Información personal del médico
+        - Especialidad médica
+        - Centro médico asignado
+        - Dirección del centro
+      operationId: getAllMedics
+      tags:
+        - Admin
+      security:
+        - AdminBearerAuth: []
+      responses:
+        '200':
+          description: Médicos obtenidos exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminMedicsResponse'
+        '401':
+          description: Token JWT inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/centers:
+    get:
+      summary: Gestión de centros médicos
+      description: |
+        Obtiene todos los centros médicos disponibles organizados por país.
+      operationId: getAllCenters
+      tags:
+        - Admin
+      security:
+        - AdminBearerAuth: []
+      responses:
+        '200':
+          description: Centros obtenidos exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminCentersResponse'
+        '401':
+          description: Token JWT inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/specialties:
+    get:
+      summary: Gestión de especialidades médicas
+      description: |
+        Obtiene todas las especialidades médicas disponibles organizadas por país.
+      operationId: getAllSpecialties
+      tags:
+        - Admin
+      security:
+        - AdminBearerAuth: []
+      responses:
+        '200':
+          description: Especialidades obtenidas exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminSpecialtiesResponse'
+        '401':
+          description: Token JWT inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+# ============= COMPONENTS =============
+components:
+  securitySchemes:
+    AdminBearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT token obtenido desde `/admin/auth`.
+        
+        **Formato:** `Bearer <token>`
+
+  schemas:
+    # ========== APPOINTMENT SCHEMAS ==========
+    CreateAppointmentRequest:
+      type: object
+      required:
+        - insuredId
+        - scheduleId
+        - countryISO
+      properties:
+        insuredId:
+          type: string
+          pattern: '^[0-9]{5}$'
+          description: ID del asegurado (exactamente 5 dígitos)
+          example: "12345"
+        scheduleId:
+          type: integer
+          minimum: 1
+          maximum: 99999
+          description: ID del horario disponible
+          example: 100
+        countryISO:
+          type: string
+          enum: [PE, CL]
+          description: Código ISO del país
+          example: "PE"
+
+    CreateAppointmentResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Appointment request is being processed"
+        appointmentId:
+          type: string
+          format: uuid
+          description: ID único de la cita generado
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        status:
+          type: string
+          enum: [pending, completed, cancelled]
+          example: "pending"
+        countryISO:
+          type: string
+          enum: [PE, CL]
+          example: "PE"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-09-13T22:30:00.000Z"
+
+    GetAppointmentsResponse:
+      type: object
+      properties:
+        insuredId:
+          type: string
+          example: "12345"
+        count:
+          type: integer
+          description: Número total de citas encontradas
+          example: 3
+        appointments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Appointment'
+
+    Appointment:
+      type: object
+      properties:
+        appointmentId:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        insuredId:
+          type: string
+          example: "12345"
+        scheduleId:
+          type: integer
+          example: 100
+        countryISO:
+          type: string
+          enum: [PE, CL]
+          example: "PE"
+        status:
+          type: string
+          enum: [pending, completed, cancelled]
+          example: "completed"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-09-13T22:30:00.000Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2025-09-13T22:30:15.000Z"
+
+    # ========== ADMIN SCHEMAS ==========
+    AdminLoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          description: Nombre de usuario del administrador
+          example: "admin"
+        password:
+          type: string
+          description: Contraseña del administrador
+          example: "rimac2024"
+
+    AdminLoginResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        token:
+          type: string
+          description: JWT token válido por 24 horas
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        user:
+          type: object
+          properties:
+            username:
+              type: string
+              example: "admin"
+            role:
+              type: string
+              example: "admin"
+        expiresIn:
+          type: string
+          example: "24h"
+
+    AdminStatsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            overview:
+              type: object
+              properties:
+                totalAppointments:
+                  type: integer
+                  example: 31
+                pendingAppointments:
+                  type: integer
+                  example: 25
+                completedAppointments:
+                  type: integer
+                  example: 6
+                successRate:
+                  type: integer
+                  description: Porcentaje de citas completadas
+                  example: 19
+            rds:
+              type: object
+              properties:
+                total:
+                  type: integer
+                  example: 31
+                pe:
+                  type: integer
+                  example: 25
+                cl:
+                  type: integer
+                  example: 6
+            performance:
+              type: object
+              properties:
+                avgProcessingTime:
+                  type: string
+                  example: "~250ms"
+                systemHealth:
+                  type: string
+                  example: "Healthy - RDS Only"
+                lastUpdate:
+                  type: string
+                  format: date-time
+
+    AdminAppointmentsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            rds:
+              type: object
+              properties:
+                pe:
+                  type: object
+                  properties:
+                    appointments:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/DetailedAppointment'
+                    count:
+                      type: integer
+                      example: 25
+                cl:
+                  type: object
+                  properties:
+                    appointments:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/DetailedAppointment'
+                    count:
+                      type: integer
+                      example: 6
+
+    DetailedAppointment:
+      type: object
+      properties:
+        appointment_id:
+          type: string
+          format: uuid
+        insured_id:
+          type: string
+        country_iso:
+          type: string
+          enum: [PE, CL]
+        medic_name:
+          type: string
+          example: "Dr. Juan Pérez"
+        specialty_name:
+          type: string
+          example: "Cardiología"
+        center_name:
+          type: string
+          example: "Clínica Internacional"
+        center_address:
+          type: string
+          example: "Av. 28 de Julio 1234"
+        center_city:
+          type: string
+          example: "Lima"
+        status:
+          type: string
+          enum: [pending, confirmed, completed, cancelled]
+        appointment_date:
+          type: string
+          format: date-time
+
+    AdminMedicsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            pe:
+              type: array
+              items:
+                $ref: '#/components/schemas/MedicInfo'
+            cl:
+              type: array
+              items:
+                $ref: '#/components/schemas/MedicInfo'
+            summary:
+              type: object
+              properties:
+                totalMedics:
+                  type: integer
+                  example: 6
+                byCountry:
+                  type: object
+                  properties:
+                    PE:
+                      type: integer
+                      example: 3
+                    CL:
+                      type: integer
+                      example: 3
+
+    MedicInfo:
+      type: object
+      properties:
+        medic_id:
+          type: integer
+        name:
+          type: string
+          example: "Dr. Juan Pérez"
+        specialty_id:
+          type: integer
+        center_id:
+          type: integer
+        specialty_name:
+          type: string
+          example: "Cardiología"
+        center_name:
+          type: string
+          example: "Clínica Internacional"
+        center_address:
+          type: string
+        center_city:
+          type: string
+
+    AdminCentersResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            pe:
+              type: array
+              items:
+                $ref: '#/components/schemas/Center'
+            cl:
+              type: array
+              items:
+                $ref: '#/components/schemas/Center'
+
+    AdminSpecialtiesResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            pe:
+              type: array
+              items:
+                $ref: '#/components/schemas/Specialty'
+            cl:
+              type: array
+              items:
+                $ref: '#/components/schemas/Specialty'
+
+    Center:
+      type: object
+      properties:
+        center_id:
+          type: integer
+        name:
+          type: string
+          example: "Clínica Internacional"
+        address:
+          type: string
+          example: "Av. 28 de Julio 1234"
+        city:
+          type: string
+          example: "Lima"
+        country_iso:
+          type: string
+          enum: [PE, CL]
+
+    Specialty:
+      type: object
+      properties:
+        specialty_id:
+          type: integer
+        name:
+          type: string
+          example: "Cardiología"
+
+    # ========== ERROR SCHEMAS ==========
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Descripción del error
+          example: "Invalid request parameters"
+        message:
+          type: string
+          description: Mensaje detallado del error
+          example: "insuredId must be exactly 5 digits"
+        details:
+          type: object
+          description: Detalles adicionales del error (opcional)
+
+# ============= EJEMPLO =============
+examples:
+  CreateAppointmentPeru:
+    summary: Crear cita en Perú
+    value:
+      insuredId: "12345"
+      scheduleId: 100
+      countryISO: "PE"
+      
+  CreateAppointmentChile:
+    summary: Crear cita en Chile  
+    value:
+      insuredId: "67890"
+      scheduleId: 200
+      countryISO: "CL"
+
+  AdminLoginExample:
+    summary: Login de administrador
+    value:
+      username: "admin"
+      password: "rimac2024"

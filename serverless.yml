@@ -1,0 +1,475 @@
+service: rimac-appointment-backend
+
+frameworkVersion: '3'
+
+useDotenv: true
+
+plugins:
+  - serverless-esbuild
+  - serverless-iam-roles-per-function
+  - serverless-offline
+
+custom:
+  # Configuración de esbuild
+  esbuild:
+    bundle: true
+    minify: false
+    sourcemap: true
+    exclude: ['aws-sdk']
+    target: 'node18'
+    platform: 'node'
+    concurrency: 10
+  
+  stage: ${opt:stage, 'dev'}
+  region: us-east-2
+  tableName: ${self:service}-appointments-${self:custom.stage}
+  
+  # RDS Configuration (already created manually)
+  rds:
+    host: ${env:RDS_HOST}
+    username: ${env:RDS_USERNAME}
+    password: ${env:RDS_PASSWORD}
+    port: ${env:RDS_PORT, '3306'}
+    peDatabase: appointment_pe
+    clDatabase: appointment_cl
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: ${self:custom.region}
+  stage: ${self:custom.stage}
+  memorySize: 1024  # ⚡ 8x MÁS MEMORIA = COLD START 4-6x MÁS RÁPIDO
+  timeout: 29       # ⏱️ MÁXIMO PARA API GATEWAY
+
+
+  environment:
+    STAGE: ${self:custom.stage}
+    REGION: ${self:custom.region}
+    DYNAMODB_TABLE: ${self:custom.tableName}
+    SNS_TOPIC_ARN: !Ref AppointmentTopic
+    SQS_PE_URL: !Ref AppointmentQueuePE
+    SQS_CL_URL: !Ref AppointmentQueueCL
+    SQS_CONFIRMATION_URL: !Ref ConfirmationQueue
+    EVENTBRIDGE_BUS_NAME: ${self:service}-${self:custom.stage}
+    RDS_HOST: ${env:RDS_HOST}
+    RDS_USERNAME: ${env:RDS_USERNAME}
+    RDS_PASSWORD: ${env:RDS_PASSWORD}
+    RDS_PORT: ${env:RDS_PORT}
+    RDS_PE_DATABASE: ${env:RDS_PE_DATABASE}
+    RDS_CL_DATABASE: ${env:RDS_CL_DATABASE}
+    JWT_SECRET: ${env:JWT_SECRET, 'rimac-secret-2024-default'}
+
+functions:
+  admin:
+    handler: src/handlers/admin.handler
+    timeout: 30
+    vpc: 
+      securityGroupIds:
+        - sg-0121348cf362d93b5
+      subnetIds:
+        - subnet-0814d96044dac1e2f
+        - subnet-05f80e659d5ee98da
+    environment:
+      RDS_HOST: ${self:custom.rds.host}
+      RDS_USERNAME: ${self:custom.rds.username}
+      RDS_PASSWORD: ${self:custom.rds.password}
+      RDS_PORT: ${self:custom.rds.port}
+      RDS_PE_DATABASE: ${env:RDS_PE_DATABASE}
+      RDS_CL_DATABASE: ${env:RDS_CL_DATABASE}
+    events:
+      - http:
+          path: admin/auth
+          method: post
+          cors: true
+      - http:
+          path: admin/appointments
+          method: get
+          cors: true
+      - http:
+          path: admin/stats
+          method: get
+          cors: true
+      - http:
+          path: admin/centers
+          method: get
+          cors: true
+      - http:
+          path: admin/specialties
+          method: get
+          cors: true
+      - http:
+          path: admin/medics
+          method: get
+          cors: true
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:PutItem
+          - dynamodb:GetItem
+          - dynamodb:Query
+          - dynamodb:Scan
+          - dynamodb:UpdateItem
+        Resource: 
+          - !GetAtt AppointmentsTable.Arn
+          - !Sub "${AppointmentsTable.Arn}/index/*"
+      - Effect: Allow
+        Action:
+          - ec2:CreateNetworkInterface
+          - ec2:DescribeNetworkInterfaces
+          - ec2:DeleteNetworkInterface
+          - ec2:AttachNetworkInterface
+          - ec2:DetachNetworkInterface
+        Resource: "*"
+
+  appointment:
+    handler: src/handlers/appointment.handler
+    events:
+      - http:
+          path: appointments
+          method: post
+          cors: true
+      - http:
+          path: appointments/{insuredId}
+          method: get
+          cors: true
+      - sqs:
+          arn: !GetAtt ConfirmationQueue.Arn
+          batchSize: 1
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:PutItem
+          - dynamodb:GetItem
+          - dynamodb:UpdateItem
+          - dynamodb:Query
+          - dynamodb:Scan
+        Resource: !GetAtt AppointmentsTable.Arn
+      - Effect: Allow
+        Action:
+          - sns:Publish
+        Resource: !Ref AppointmentTopic
+      - Effect: Allow
+        Action:
+          - sqs:ReceiveMessage
+          - sqs:DeleteMessage
+          - sqs:GetQueueAttributes
+        Resource: !GetAtt ConfirmationQueue.Arn
+      - Effect: Allow
+        Action:
+          - logs:CreateLogGroup
+          - logs:CreateLogStream
+          - logs:PutLogEvents
+        Resource: "*"
+
+  appointmentPE:
+    handler: src/handlers/appointmentPE.handler
+    timeout: 30
+    memorySize: 1024
+    events:
+      - sqs:
+          arn: !GetAtt AppointmentQueuePE.Arn
+          batchSize: 1
+    environment:
+      RDS_HOST: ${env:RDS_HOST}
+      RDS_USERNAME: ${env:RDS_USERNAME}
+      RDS_PASSWORD: ${env:RDS_PASSWORD}
+      RDS_PORT: ${env:RDS_PORT}
+      RDS_PE_DATABASE: ${env:RDS_PE_DATABASE}
+      RDS_CL_DATABASE: ${env:RDS_CL_DATABASE}
+      EVENTBRIDGE_BUS_NAME: ${self:service}-${self:custom.stage}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - sqs:ReceiveMessage
+          - sqs:DeleteMessage
+          - sqs:GetQueueAttributes
+        Resource: !GetAtt AppointmentQueuePE.Arn
+      - Effect: Allow
+        Action:
+          - events:PutEvents
+        Resource: !GetAtt AppointmentEventBridge.Arn
+      - Effect: Allow
+        Action:
+          - ec2:CreateNetworkInterface
+          - ec2:DescribeNetworkInterfaces
+          - ec2:DeleteNetworkInterface
+          - ec2:AttachNetworkInterface
+          - ec2:DetachNetworkInterface
+        Resource: "*"
+      - Effect: Allow
+        Action:
+          - logs:CreateLogGroup
+          - logs:CreateLogStream
+          - logs:PutLogEvents
+        Resource: "*"
+
+  appointmentCL:
+    handler: src/handlers/appointmentCL.handler
+    timeout: 30                  
+    memorySize: 1024             
+    events:
+      - sqs:
+          arn: !GetAtt AppointmentQueueCL.Arn
+          batchSize: 1
+    environment:
+      RDS_HOST: ${env:RDS_HOST}
+      RDS_USERNAME: ${env:RDS_USERNAME}
+      RDS_PASSWORD: ${env:RDS_PASSWORD}
+      RDS_PORT: ${env:RDS_PORT}
+      RDS_PE_DATABASE: ${env:RDS_PE_DATABASE}
+      RDS_CL_DATABASE: ${env:RDS_CL_DATABASE}
+      EVENTBRIDGE_BUS_NAME: ${self:service}-${self:custom.stage}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - sqs:ReceiveMessage
+          - sqs:DeleteMessage
+          - sqs:GetQueueAttributes
+        Resource: !GetAtt AppointmentQueueCL.Arn
+      - Effect: Allow
+        Action:
+          - events:PutEvents
+        Resource: !GetAtt AppointmentEventBridge.Arn
+      - Effect: Allow
+        Action:
+          - ec2:CreateNetworkInterface
+          - ec2:DescribeNetworkInterfaces
+          - ec2:DeleteNetworkInterface
+          - ec2:AttachNetworkInterface
+          - ec2:DetachNetworkInterface
+        Resource: "*"
+      - Effect: Allow
+        Action:
+          - logs:CreateLogGroup
+          - logs:CreateLogStream
+          - logs:PutLogEvents
+        Resource: "*"
+
+resources:
+  Resources:
+    # DynamoDB Table
+    AppointmentsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.tableName}
+        BillingMode: PAY_PER_REQUEST  # Free tier friendly
+        AttributeDefinitions:
+          - AttributeName: appointmentId
+            AttributeType: S
+          - AttributeName: insuredId
+            AttributeType: S
+          - AttributeName: createdAt
+            AttributeType: S
+        KeySchema:
+          - AttributeName: appointmentId
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: InsuredIdIndex
+            KeySchema:
+              - AttributeName: insuredId
+                KeyType: HASH
+              - AttributeName: createdAt
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+        StreamSpecification:
+          StreamViewType: NEW_AND_OLD_IMAGES
+        PointInTimeRecoverySpecification:
+          PointInTimeRecoveryEnabled: false
+        Tags:
+          - Key: Environment
+            Value: ${self:custom.stage}
+          - Key: Service
+            Value: ${self:service}
+
+    # SNS Topic
+    AppointmentTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: ${self:service}-appointments-${self:custom.stage}
+        DisplayName: "RIMAC Appointment Notifications"
+        Tags:
+          - Key: Environment
+            Value: ${self:custom.stage}
+          - Key: Service
+            Value: ${self:service}
+
+    # SNS Subscriptions
+    AppointmentTopicSubscriptionPE:
+      Type: AWS::SNS::Subscription
+      Properties:
+        TopicArn: !Ref AppointmentTopic
+        Protocol: sqs
+        Endpoint: !GetAtt AppointmentQueuePE.Arn
+        FilterPolicy:
+          countryISO: ["PE"]
+
+    AppointmentTopicSubscriptionCL:
+      Type: AWS::SNS::Subscription
+      Properties:
+        TopicArn: !Ref AppointmentTopic
+        Protocol: sqs
+        Endpoint: !GetAtt AppointmentQueueCL.Arn
+        FilterPolicy:
+          countryISO: ["CL"]
+
+    # SQS Queues
+    AppointmentQueuePE:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-appointments-pe-${self:custom.stage}
+        VisibilityTimeoutSeconds: 60
+        MessageRetentionPeriod: 1209600  # 14 days
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt AppointmentDLQPE.Arn
+          maxReceiveCount: 3
+        Tags:
+          - Key: Environment
+            Value: ${self:custom.stage}
+          - Key: Service
+            Value: ${self:service}
+          - Key: Country
+            Value: PE
+
+    AppointmentQueueCL:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-appointments-cl-${self:custom.stage}
+        VisibilityTimeoutSeconds: 60
+        MessageRetentionPeriod: 1209600  # 14 days
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt AppointmentDLQCL.Arn
+          maxReceiveCount: 3
+        Tags:
+          - Key: Environment
+            Value: ${self:custom.stage}
+          - Key: Service
+            Value: ${self:service}
+          - Key: Country
+            Value: CL
+
+    ConfirmationQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-confirmations-${self:custom.stage}
+        VisibilityTimeoutSeconds: 60
+        MessageRetentionPeriod: 1209600  # 14 days
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt ConfirmationDLQ.Arn
+          maxReceiveCount: 3
+        Tags:
+          - Key: Environment
+            Value: ${self:custom.stage}
+          - Key: Service
+            Value: ${self:service}
+
+    # Dead Letter Queues
+    AppointmentDLQPE:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-appointments-pe-dlq-${self:custom.stage}
+        MessageRetentionPeriod: 1209600  # 14 days
+
+    AppointmentDLQCL:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-appointments-cl-dlq-${self:custom.stage}
+        MessageRetentionPeriod: 1209600  # 14 days
+
+    ConfirmationDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-confirmations-dlq-${self:custom.stage}
+        MessageRetentionPeriod: 1209600  # 14 days
+
+    # SQS Queue Policies for SNS
+    AppointmentQueuePEPolicy:
+      Type: AWS::SQS::QueuePolicy
+      Properties:
+        Queues:
+          - !Ref AppointmentQueuePE
+        PolicyDocument:
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: sns.amazonaws.com
+              Action: sqs:SendMessage
+              Resource: !GetAtt AppointmentQueuePE.Arn
+              Condition:
+                ArnEquals:
+                  aws:SourceArn: !Ref AppointmentTopic
+
+    AppointmentQueueCLPolicy:
+      Type: AWS::SQS::QueuePolicy
+      Properties:
+        Queues:
+          - !Ref AppointmentQueueCL
+        PolicyDocument:
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: sns.amazonaws.com
+              Action: sqs:SendMessage
+              Resource: !GetAtt AppointmentQueueCL.Arn
+              Condition:
+                ArnEquals:
+                  aws:SourceArn: !Ref AppointmentTopic
+
+    # EventBridge Custom Bus
+    AppointmentEventBridge:
+      Type: AWS::Events::EventBus
+      Properties:
+        Name: ${self:service}-${self:custom.stage}
+        Tags:
+          - Key: Environment
+            Value: ${self:custom.stage}
+          - Key: Service
+            Value: ${self:service}
+
+    # EventBridge Rule
+    AppointmentConfirmationRule:
+      Type: AWS::Events::Rule
+      Properties:
+        EventBusName: !Ref AppointmentEventBridge
+        Name: ${self:service}-confirmation-rule-${self:custom.stage}
+        Description: "Rule to process appointment confirmations"
+        State: ENABLED        
+        EventPattern:
+          source: ["rimac.appointments"]
+          detail-type: ["Appointment Confirmed"]
+        Targets:
+          - Arn: !GetAtt ConfirmationQueue.Arn
+            Id: "ConfirmationQueueTarget"
+
+    # EventBridge Target Permission
+    EventBridgeToSQSPermission:
+      Type: AWS::SQS::QueuePolicy
+      Properties:
+        Queues:
+          - !Ref ConfirmationQueue
+        PolicyDocument:
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: events.amazonaws.com
+              Action: sqs:SendMessage
+              Resource: !GetAtt ConfirmationQueue.Arn
+              Condition:
+                ArnEquals:
+                  aws:SourceArn: !GetAtt AppointmentConfirmationRule.Arn
+
+  Outputs:
+    ApiGatewayRestApiId:
+      Value: !Ref ApiGatewayRestApi
+    ApiGatewayRestApiRootResourceId:
+      Value: !GetAtt ApiGatewayRestApi.RootResourceId
+    DynamoDBTableName:
+      Value: !Ref AppointmentsTable
+    SNSTopicArn:
+      Value: !Ref AppointmentTopic
+    SQSPEUrl:
+      Value: !Ref AppointmentQueuePE
+    SQSCLUrl:
+      Value: !Ref AppointmentQueueCL
+    EventBridgeBusArn:
+      Value: !GetAtt AppointmentEventBridge.Arn
