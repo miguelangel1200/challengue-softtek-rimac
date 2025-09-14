@@ -31,7 +31,6 @@ export class DynamoService {
     }
   }
 
-  // ✅ CAMBIAR A SCAN - NO REQUIERE GSI
   async getAppointmentsByInsuredId(insuredId: string): Promise<Appointment[]> {
     try {
       Logger.info('Getting appointments by insuredId using SCAN', { insuredId });

@@ -113,13 +113,11 @@ async function createAppointment(event: APIGatewayProxyEvent): Promise<APIGatewa
       });
     } catch (snsError) {
       Logger.error('Failed to publish to SNS', snsError);
-      // Opcional: marcar appointment como failed en DynamoDB
       throw snsError; // Re-throw para devolver error 500
     }
 
     Logger.info('Appointment created successfully', { appointmentId });
 
-    // ✅ RESPONDER DESPUÉS DE COMPLETAR TODO EL FLUJO
     return createSuccessResponse(201, {
       message: 'Appointment request is being processed',
       appointmentId,
@@ -181,7 +179,6 @@ async function handleSQSEvent(event: SQSEvent): Promise<APIGatewayProxyResult> {
         const messageBody = JSON.parse(record.body);
         Logger.info('Parsed message body', { messageBody });
 
-        // Puede ser un mensaje directo o envuelto en SNS
         let eventDetail;
         if (messageBody.Message) {
           // Mensaje de SNS

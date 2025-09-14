@@ -236,7 +236,6 @@ export class RDSService {
         Math.floor(Math.random() * 4) * 15
       ); // 8AM-6PM, intervalos de 15min
 
-      // ✅ INSERT CON ESTRUCTURA REAL
       const query = `
         INSERT IGNORE INTO appointments 
         (appointment_id, insured_id, schedule_id, country_iso, center_id, specialty_id, medic_id, appointment_date, status)
@@ -274,7 +273,6 @@ export class RDSService {
         database,
         affectedRows: result.affectedRows,
         insertId: result.insertId,
-        // Datos reales insertados
         realData: {
           centerName: center.name,
           centerAddress: center.address,
@@ -313,7 +311,6 @@ export class RDSService {
     }
   }
 
-  // ✅ TUS MÉTODOS HELPER EXISTENTES - Corregir IDs
   private async getRandomMedic(
     connection: mysql.Connection,
     countryISO: string

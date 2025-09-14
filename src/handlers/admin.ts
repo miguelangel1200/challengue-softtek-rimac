@@ -185,7 +185,6 @@ async function handleGetStats(): Promise<APIGatewayProxyResult> {
       })
     ]);
 
-    // ✅ STATS SOLO DE RDS (más rápidas)
     const allRdsAppointments = [...rdsAppointmentsPE, ...rdsAppointmentsCL];
     
     const rdsStats = {

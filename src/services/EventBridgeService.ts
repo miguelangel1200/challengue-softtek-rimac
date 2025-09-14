@@ -1,6 +1,5 @@
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 import { EventBridgeEvent } from '../types';
-import { CONSTANTS } from '../utils/constants';
 import { Logger } from '../utils/logger';
 
 export class EventBridgeService {

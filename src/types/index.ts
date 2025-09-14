@@ -2,7 +2,6 @@ export { AppointmentRequest } from '../models/AppointmentRequest';
 export { AppointmentEntity } from '../models/AppointmentEntity';
 export { ScheduleDetails } from '../models/DatabaseModels';
 
-// ✅ INTERFAZ APPOINTMENT FALTANTE
 export interface Appointment {
   appointmentId: string;
   insuredId: string;
@@ -20,7 +19,6 @@ export interface SNSMessage {
   countryISO: 'PE' | 'CL';
 }
 
-// ✅ INTERFAZ DATABASE APPOINTMENT (para RDS)
 export interface DatabaseAppointment {
   appointment_id: string;
   insured_id: string;
@@ -32,7 +30,6 @@ export interface DatabaseAppointment {
   status: string;
 }
 
-// ✅ INTERFAZ EVENTBRIDGE EVENT
 export interface EventBridgeEvent {
   Source: string;
   DetailType: string;
@@ -42,7 +39,6 @@ export interface EventBridgeEvent {
     scheduleId: number;
     countryISO: 'PE' | 'CL';
     status: string;
-    // Campos adicionales opcionales
     processedBy?: string;
     database?: string;
     timestamp?: string;
@@ -50,7 +46,6 @@ export interface EventBridgeEvent {
   EventBusName: string;
 }
 
-// ✅ REQUEST/RESPONSE TYPES
 export interface CreateAppointmentRequest {
   insuredId: string;
   scheduleId: number;
@@ -69,7 +64,6 @@ export interface GetAppointmentsResponse {
   count: number;
 }
 
-// ✅ ADMIN TYPES
 export interface AdminLoginRequest {
   username: string;
   password: string;
@@ -84,7 +78,6 @@ export interface AdminLoginResponse {
   expiresIn: string;
 }
 
-// ✅ RDS ENTITY TYPES
 export interface Center {
   center_id: number;
   name: string;
@@ -105,7 +98,6 @@ export interface Medic {
   center_id: number;
 }
 
-// ✅ API RESPONSE TYPES
 export interface ApiResponse<T = any> {
   success: boolean;
   data?: T;
