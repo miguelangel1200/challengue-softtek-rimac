@@ -1,0 +1,97 @@
+admin:
+  handler: src/handlers/admin.handler
+  timeout: 30
+  vpc:
+    securityGroupIds: ${self:custom.vpc.securityGroupIds}
+    subnetIds: ${self:custom.vpc.subnetIds}
+  environment:
+    RDS_HOST: ${self:custom.rds.host}
+    RDS_USERNAME: ${self:custom.rds.username}
+    RDS_PASSWORD: ${self:custom.rds.password}
+    RDS_PORT: ${self:custom.rds.port}
+    RDS_PE_DATABASE: ${env:RDS_PE_DATABASE}
+    RDS_CL_DATABASE: ${env:RDS_CL_DATABASE}
+  events:
+    - http:
+        path: admin/auth
+        method: post
+        cors: true
+    - http:
+        path: admin/appointments
+        method: get
+        cors: true
+    - http:
+        path: admin/stats
+        method: get
+        cors: true
+    - http:
+        path: admin/centers
+        method: get
+        cors: true
+    - http:
+        path: admin/specialties
+        method: get
+        cors: true
+    - http:
+        path: admin/medics
+        method: get
+        cors: true
+
+appointment:
+  handler: src/handlers/appointment.handler
+  events:
+    - http:
+        path: appointments
+        method: post
+        cors: true
+    - http:
+        path: appointments/{insuredId}
+        method: get
+        cors: true
+    - sqs:
+        arn: !GetAtt ConfirmationQueue.Arn
+        batchSize: 1
+
+appointmentPE:
+  handler: src/handlers/appointmentPE.handler
+  timeout: 30
+  memorySize: 1024
+  events:
+    - sqs:
+        arn: !GetAtt AppointmentQueuePE.Arn
+        batchSize: 1
+  environment:
+    RDS_HOST: ${env:RDS_HOST}
+    RDS_USERNAME: ${env:RDS_USERNAME}
+    RDS_PASSWORD: ${env:RDS_PASSWORD}
+    RDS_PORT: ${env:RDS_PORT}
+    RDS_PE_DATABASE: ${env:RDS_PE_DATABASE}
+    RDS_CL_DATABASE: ${env:RDS_CL_DATABASE}
+    EVENTBRIDGE_BUS_NAME: ${self:custom.naming.eventBusName}
+
+appointmentCL:
+  handler: src/handlers/appointmentCL.handler
+  timeout: 30
+  memorySize: 1024
+  events:
+    - sqs:
+        arn: !GetAtt AppointmentQueueCL.Arn
+        batchSize: 1
+  environment:
+    RDS_HOST: ${env:RDS_HOST}
+    RDS_USERNAME: ${env:RDS_USERNAME}
+    RDS_PASSWORD: ${env:RDS_PASSWORD}
+    RDS_PORT: ${env:RDS_PORT}
+    RDS_PE_DATABASE: ${env:RDS_PE_DATABASE}
+    RDS_CL_DATABASE: ${env:RDS_CL_DATABASE}
+    EVENTBRIDGE_BUS_NAME: ${self:custom.naming.eventBusName}
+
+# emailNotification:
+#   handler: src/handlers/emailNotification.handler
+#   timeout: 30
+#   events:
+#     - sqs:
+#         arn: !GetAtt EmailQueue.Arn
+#         batchSize: 1
+#   environment:
+#     SES_CONFIGURATION_SET: ${self:custom.naming.sesConfigSetName}

@@ -1,0 +1,37 @@
+dotenv: {}
+
+esbuild:
+  bundle: true
+  minify: false
+  sourcemap: true
+  exclude: ['aws-sdk']
+  target: node18
+  platform: 'node'
+  concurrency: 10
+
+# Stage y Región
+stage: ${opt:stage, 'dev'}
+region: us-east-2
+tableName: ${self:service}-appointments-${self:custom.stage}
+
+# RDS
+rds:
+  host: ${env:RDS_HOST}
+  username: ${env:RDS_USERNAME}
+  password: ${env:RDS_PASSWORD}
+  port: ${env:RDS_PORT, '3306'}
+  peDatabase: ${env:RDS_PE_DATABASE}
+  clDatabase: ${env:RDS_CL_DATABASE}
+
+# VPC
+vpc:
+  securityGroupIds:
+    - ${env:VPC_SECURITY_GROUP_ID}
+  subnetIds:
+    - ${env:VPC_SUBNET_ID_1}
+    - ${env:VPC_SUBNET_ID_2}
+
+# Naming patterns
+naming:
+  eventBusName: ${self:service}-${self:custom.stage}
+  confirmationRuleName: ${self:service}-confirmation-rule-${self:custom.stage}

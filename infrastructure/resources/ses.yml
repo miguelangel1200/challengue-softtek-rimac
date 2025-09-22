@@ -1,0 +1,350 @@
+Resources:
+  # SES Configuration Set
+  SESConfigurationSet:
+    Type: AWS::SES::ConfigurationSet
+    Properties:
+      Name: ${self:service}-emails-${self:custom.stage}
+      DeliveryOptions:
+        TlsPolicy: Require
+      ReputationTrackingEnabled: true
+      SendingEnabled: true
+
+  # Event destinations for SES metrics
+  SESEventDestination:
+    Type: AWS::SES::ConfigurationSetEventDestination
+    Properties:
+      ConfigurationSetName: !Ref SESConfigurationSet
+      EventDestination:
+        Name: ${self:service}-cloudwatch-events-${self:custom.stage}
+        Enabled: true
+        MatchingEventTypes:
+          - send
+          - reject
+          - bounce
+          - complaint
+          - delivery
+          - open
+          - click
+        CloudWatchDestination:
+          DimensionConfigurations:
+            - DimensionName: MessageTag
+              DimensionValueSource: messageTag
+              DefaultDimensionValue: default
+            - DimensionName: EmailAddress
+              DimensionValueSource: emailAddress
+              DefaultDimensionValue: default
+
+  # Email Templates
+  AppointmentConfirmationTemplate:
+    Type: AWS::SES::Template
+    Properties:
+      TemplateName: AppointmentConfirmation-${self:custom.stage}
+      Subject: "✅ Tu cita médica RIMAC ha sido confirmada - {{appointmentId}}"
+      TextPart: |
+        Estimado/a {{patientName}},
+
+        ¡Tu cita médica ha sido confirmada exitosamente!
+
+        DETALLES DE TU CITA:
+        ━━━━━━━━━━━━━━━━━━━━━━
+        📅 Fecha y hora: {{appointmentDate}}
+        🏥 Centro médico: {{centerName}}
+        👨‍⚕️ Médico: {{doctorName}}
+        🩺 Especialidad: {{specialty}}
+        📍 Dirección: {{centerAddress}}, {{centerCity}}
+        
+        ID de cita: {{appointmentId}}
+        País: {{country}}
+
+        INFORMACIÓN IMPORTANTE:
+        ━━━━━━━━━━━━━━━━━━━━━━
+        • Llega 15 minutos antes de tu cita
+        • Trae tu documento de identidad
+        • Trae tu carné de seguro RIMAC
+        • Si necesitas cancelar, hazlo con 24h de anticipación
+
+        ¿Necesitas ayuda?
+        📞 Central telefónica: {{phoneNumber}}
+        💬 Chat online: {{chatUrl}}
+        📧 Email soporte: {{supportEmail}}
+
+        ¡Esperamos verte pronto!
+
+        Equipo RIMAC
+        Tu salud, nuestra prioridad
+
+      HtmlPart: |
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Confirmación de Cita - RIMAC</title>
+          <style>
+            body { font-family: 'Arial', sans-serif; margin: 0; padding: 0; background-color: #f4f4f4; }
+            .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
+            .header { background: linear-gradient(135deg, #0066cc, #004c99); color: white; padding: 20px; text-align: center; }
+            .logo { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
+            .content { padding: 30px; }
+            .appointment-card { background-color: #f8f9fa; border-left: 4px solid #0066cc; padding: 20px; margin: 20px 0; }
+            .detail-row { display: flex; margin-bottom: 10px; }
+            .detail-label { font-weight: bold; width: 140px; color: #333; }
+            .detail-value { color: #555; flex: 1; }
+            .important-info { background-color: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; margin: 20px 0; border-radius: 5px; }
+            .footer { background-color: #f8f9fa; padding: 20px; text-align: center; color: #666; font-size: 14px; }
+            .button { display: inline-block; background-color: #0066cc; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 10px; }
+            .contact-info { margin-top: 20px; }
+            .contact-item { margin: 8px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <div class="logo">🏥 RIMAC</div>
+              <h1>¡Cita Confirmada!</h1>
+            </div>
+            
+            <div class="content">
+              <h2>Estimado/a {{patientName}},</h2>
+              <p>¡Tu cita médica ha sido <strong>confirmada exitosamente</strong>!</p>
+              
+              <div class="appointment-card">
+                <h3>📋 Detalles de tu cita</h3>
+                <div class="detail-row">
+                  <div class="detail-label">📅 Fecha y hora:</div>
+                  <div class="detail-value"><strong>{{appointmentDate}}</strong></div>
+                </div>
+                <div class="detail-row">
+                  <div class="detail-label">🏥 Centro médico:</div>
+                  <div class="detail-value">{{centerName}}</div>
+                </div>
+                <div class="detail-row">
+                  <div class="detail-label">👨‍⚕️ Médico:</div>
+                  <div class="detail-value">{{doctorName}}</div>
+                </div>
+                <div class="detail-row">
+                  <div class="detail-label">🩺 Especialidad:</div>
+                  <div class="detail-value">{{specialty}}</div>
+                </div>
+                <div class="detail-row">
+                  <div class="detail-label">📍 Dirección:</div>
+                  <div class="detail-value">{{centerAddress}}, {{centerCity}}</div>
+                </div>
+                <div class="detail-row">
+                  <div class="detail-label">🆔 ID de cita:</div>
+                  <div class="detail-value"><code>{{appointmentId}}</code></div>
+                </div>
+              </div>
+
+              <div class="important-info">
+                <h3>📝 Información importante</h3>
+                <ul>
+                  <li><strong>Llega 15 minutos antes</strong> de tu cita</li>
+                  <li>Trae tu <strong>documento de identidad</strong></li>
+                  <li>Trae tu <strong>carné de seguro RIMAC</strong></li>
+                  <li>Para cancelar, hazlo con <strong>24h de anticipación</strong></li>
+                </ul>
+              </div>
+
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="{{chatUrl}}" class="button">💬 Chat de Soporte</a>
+                <a href="tel:{{phoneNumber}}" class="button">📞 Llamar</a>
+              </div>
+
+              <div class="contact-info">
+                <h3>¿Necesitas ayuda?</h3>
+                <div class="contact-item">📞 <strong>Central:</strong> {{phoneNumber}}</div>
+                <div class="contact-item">💬 <strong>Chat:</strong> <a href="{{chatUrl}}">{{chatUrl}}</a></div>
+                <div class="contact-item">📧 <strong>Email:</strong> <a href="mailto:{{supportEmail}}">{{supportEmail}}</a></div>
+              </div>
+            </div>
+            
+            <div class="footer">
+              <p><strong>Equipo RIMAC</strong><br>Tu salud, nuestra prioridad</p>
+              <p>Este es un email automático, por favor no responder directamente.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+
+  AppointmentReminderTemplate:
+    Type: AWS::SES::Template
+    Properties:
+      TemplateName: AppointmentReminder-${self:custom.stage}
+      Subject: "🔔 Recordatorio: Tu cita médica es mañana - {{appointmentId}}"
+      TextPart: |
+        Estimado/a {{patientName}},
+
+        Te recordamos que tienes una cita médica programada para mañana:
+
+        📅 Fecha: {{appointmentDate}}
+        🏥 Centro: {{centerName}}
+        👨‍⚕️ Médico: {{doctorName}}
+        📍 {{centerAddress}}
+
+        No olvides:
+        • Llegar 15 minutos antes
+        • Traer documento de identidad
+        • Traer carné RIMAC
+
+        ID: {{appointmentId}}
+
+        Equipo RIMAC
+      HtmlPart: |
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Recordatorio de Cita - RIMAC</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f4;">
+          <div style="max-width: 600px; margin: 0 auto; background-color: white; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <div style="background: linear-gradient(135deg, #ff6b35, #f7931e); color: white; padding: 20px; text-align: center;">
+              <h1 style="margin: 0;">🔔 Recordatorio de Cita</h1>
+              <p style="margin: 10px 0 0 0;">RIMAC - Tu cita es mañana</p>
+            </div>
+            
+            <div style="padding: 30px;">
+              <h2>Hola {{patientName}},</h2>
+              <p>Te recordamos que <strong>tienes una cita médica programada para mañana</strong>:</p>
+              
+              <div style="background-color: #fff3cd; border-left: 4px solid #ff6b35; padding: 20px; margin: 20px 0;">
+                <p><strong>📅 Fecha:</strong> {{appointmentDate}}</p>
+                <p><strong>🏥 Centro:</strong> {{centerName}}</p>  
+                <p><strong>👨‍⚕️ Médico:</strong> {{doctorName}}</p>
+                <p><strong>📍 Dirección:</strong> {{centerAddress}}</p>
+                <p><strong>🆔 ID:</strong> {{appointmentId}}</p>
+              </div>
+
+              <div style="background-color: #f8f9fa; padding: 15px; margin: 20px 0; border-radius: 5px;">
+                <h3>📝 No olvides:</h3>
+                <ul>
+                  <li>Llegar <strong>15 minutos antes</strong></li>
+                  <li>Traer <strong>documento de identidad</strong></li>
+                  <li>Traer <strong>carné RIMAC</strong></li>
+                </ul>
+              </div>
+            </div>
+            
+            <div style="background-color: #f8f9fa; padding: 20px; text-align: center; color: #666;">
+              <p><strong>Equipo RIMAC</strong><br>Tu salud, nuestra prioridad</p>
+            </div>
+          </div>
+        </body>
+        </html>
+
+  AppointmentCancellationTemplate:
+    Type: AWS::SES::Template
+    Properties:
+      TemplateName: AppointmentCancellation-${self:custom.stage}
+      Subject: "❌ Tu cita médica ha sido cancelada - {{appointmentId}}"
+      TextPart: |
+        Estimado/a {{patientName}},
+
+        Tu cita médica ha sido cancelada:
+
+        ID de cita: {{appointmentId}}
+        Fecha que estaba programada: {{appointmentDate}}
+        Centro: {{centerName}}
+
+        Motivo: {{cancellationReason}}
+
+        Para reagendar, contacta:
+        📞 {{phoneNumber}}
+        💬 {{chatUrl}}
+
+        Equipo RIMAC
+      HtmlPart: |
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Cita Cancelada - RIMAC</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f4;">
+          <div style="max-width: 600px; margin: 0 auto; background-color: white; border-radius: 10px; overflow: hidden;">
+            <div style="background-color: #dc3545; color: white; padding: 20px; text-align: center;">
+              <h1 style="margin: 0;">❌ Cita Cancelada</h1>
+            </div>
+            
+            <div style="padding: 30px;">
+              <h2>Hola {{patientName}},</h2>
+              <p>Lamentamos informarte que tu cita médica ha sido <strong>cancelada</strong>:</p>
+              
+              <div style="background-color: #f8d7da; border-left: 4px solid #dc3545; padding: 20px; margin: 20px 0;">
+                <p><strong>🆔 ID:</strong> {{appointmentId}}</p>
+                <p><strong>📅 Fecha programada:</strong> {{appointmentDate}}</p>
+                <p><strong>🏥 Centro:</strong> {{centerName}}</p>
+                <p><strong>📋 Motivo:</strong> {{cancellationReason}}</p>
+              </div>
+
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="{{chatUrl}}" style="display: inline-block; background-color: #0066cc; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 10px;">💬 Reagendar Cita</a>
+              </div>
+            </div>
+          </div>
+        </body>
+        </html>
+
+  # SQS Queue for email processing  
+  EmailQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-emails-${self:custom.stage}
+      VisibilityTimeoutSeconds: 60
+      MessageRetentionPeriod: 1209600  # 14 days
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt EmailDLQ.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Environment
+          Value: ${self:custom.stage}
+        - Key: Service
+          Value: ${self:service}
+        - Key: Purpose
+          Value: EmailProcessing
+
+  EmailDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-emails-dlq-${self:custom.stage}
+      MessageRetentionPeriod: 1209600  # 14 days
+      Tags:
+        - Key: Environment
+          Value: ${self:custom.stage}
+        - Key: Service
+          Value: ${self:service}
+        - Key: Purpose
+          Value: EmailDLQ
+
+# Outputs for email resources
+Outputs:
+  SESConfigurationSetName:
+    Description: "SES Configuration Set Name"
+    Value: !Ref SESConfigurationSet
+    Export:
+      Name: ${self:service}-${self:custom.stage}-ses-config-set
+
+  EmailQueueArn:
+    Description: "Email Queue ARN"
+    Value: !GetAtt EmailQueue.Arn
+    Export:
+      Name: ${self:service}-${self:custom.stage}-email-queue-arn
+
+  EmailQueueUrl:
+    Description: "Email Queue URL"
+    Value: !Ref EmailQueue
+    Export:
+      Name: ${self:service}-${self:custom.stage}-email-queue-url
+
+  AppointmentConfirmationTemplateArn:
+    Description: "Appointment Confirmation Template ARN"
+    Value: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:template/AppointmentConfirmation-${self:custom.stage}"
+    Export:
+      Name: ${self:service}-${self:custom.stage}-confirmation-template
+
+  AppointmentReminderTemplateArn:
+    Description: "Appointment Reminder Template ARN"
+    Value: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:template/AppointmentReminder-${self:custom.stage}"
+    Export:
+      Name: ${self:service}-${self:custom.stage}-reminder-template

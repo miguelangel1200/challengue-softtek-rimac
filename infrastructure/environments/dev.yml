@@ -1,0 +1,15 @@
+STAGE: ${self:custom.stage}
+REGION: ${self:custom.region}
+DYNAMODB_TABLE: ${self:custom.tableName}
+SNS_TOPIC_ARN: !Ref AppointmentTopic
+SQS_PE_URL: !Ref AppointmentQueuePE
+SQS_CL_URL: !Ref AppointmentQueueCL
+SQS_CONFIRMATION_URL: !Ref ConfirmationQueue
+EVENTBRIDGE_BUS_NAME: ${self:custom.naming.eventBusName}
+RDS_HOST: ${env:RDS_HOST}
+RDS_USERNAME: ${env:RDS_USERNAME}
+RDS_PASSWORD: ${env:RDS_PASSWORD}
+RDS_PORT: ${env:RDS_PORT}
+RDS_PE_DATABASE: ${env:RDS_PE_DATABASE}
+RDS_CL_DATABASE: ${env:RDS_CL_DATABASE}
+JWT_SECRET: ${env:JWT_SECRET, 'rimac-secret-2024-default'}

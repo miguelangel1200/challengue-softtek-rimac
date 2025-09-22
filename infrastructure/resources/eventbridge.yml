@@ -1,0 +1,43 @@
+Resources:
+  # EventBridge Bus
+  AppointmentEventBridge:
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: ${self:custom.naming.eventBusName}
+      Tags:
+        - Key: Environment
+          Value: ${self:custom.stage}
+        - Key: Service
+          Value: ${self:service}
+  
+  # EventBridge Rule
+  AppointmentConfirmationRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventBusName: !Ref AppointmentEventBridge
+      Name: ${self:custom.naming.confirmationRuleName}
+      Description: "Rule to process appointment confirmations"
+      State: ENABLED
+      EventPattern:
+        source: ["rimac.appointments"]
+        detail-type: ["Appointment Confirmed"]
+      Targets:
+        - Arn: !GetAtt ConfirmationQueue.Arn
+          Id: "ConfirmationQueueTarget"
+  
+  # EventBridge Target Permission
+  EventBridgeToSQSPermission:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref ConfirmationQueue
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt ConfirmationQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !GetAtt AppointmentConfirmationRule.Arn

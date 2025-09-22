@@ -1,0 +1,83 @@
+# infrastructure/environments/prod.yml - PRODUCTION ENVIRONMENT VARIABLES
+STAGE: prod
+REGION: ${self:custom.region}
+DYNAMODB_TABLE: ${self:service}-appointments-prod
+SNS_TOPIC_ARN: !Ref AppointmentTopic
+SQS_PE_URL: !Ref AppointmentQueuePE
+SQS_CL_URL: !Ref AppointmentQueueCL
+SQS_CONFIRMATION_URL: !Ref ConfirmationQueue
+SQS_EMAIL_URL: !Ref EmailQueue
+EVENTBRIDGE_BUS_NAME: ${self:service}-prod
+SES_CONFIGURATION_SET: ${self:service}-emails-prod
+
+# RDS Configuration for Production
+RDS_HOST: ${env:RDS_HOST_PROD}
+RDS_USERNAME: ${env:RDS_USERNAME_PROD}
+RDS_PASSWORD: ${env:RDS_PASSWORD_PROD}
+RDS_PORT: ${env:RDS_PORT_PROD, '3306'}
+RDS_PE_DATABASE: ${env:RDS_PE_DATABASE_PROD, 'appointment_pe'}
+RDS_CL_DATABASE: ${env:RDS_CL_DATABASE_PROD, 'appointment_cl'}
+
+# Security - MUST be set in production
+JWT_SECRET: ${env:JWT_SECRET_PROD}  # No default in production
+JWT_EXPIRY: ${env:JWT_EXPIRY_PROD, '24h'}
+ENCRYPTION_KEY: ${env:ENCRYPTION_KEY_PROD}
+
+# Feature flags for production
+ENABLE_DEBUG_LOGS: false
+ENABLE_DETAILED_MONITORING: true
+ENABLE_EMAIL_NOTIFICATIONS: true
+RATE_LIMIT_ENABLED: true
+RATE_LIMIT_REQUESTS_PER_MINUTE: 1000  # Higher limit in prod
+
+# External services
+EXTERNAL_API_BASE_URL: ${env:EXTERNAL_API_PROD_URL, 'https://api.rimac.com'}
+EXTERNAL_API_KEY: ${env:EXTERNAL_API_KEY_PROD}
+EXTERNAL_API_TIMEOUT: 5000
+
+# Monitoring and alerts
+SLACK_WEBHOOK_URL: ${env:SLACK_WEBHOOK_PROD}
+ERROR_NOTIFICATION_EMAIL: ${env:ERROR_EMAIL_PROD, 'alerts@rimac.com'}
+HEALTH_CHECK_ENDPOINT: ${env:HEALTH_CHECK_URL_PROD}
+
+# Cache settings
+CACHE_TTL_SECONDS: 600  # 10 minutes in production
+CACHE_ENABLED: true
+REDIS_ENDPOINT: ${env:REDIS_ENDPOINT_PROD}  # If using Redis
+
+# Database connection pool
+DB_CONNECTION_LIMIT: 20  # Higher limit for production
+DB_IDLE_TIMEOUT: 30000
+DB_ACQUIRE_TIMEOUT: 20000
+DB_CONNECTION_TIMEOUT: 5000
+
+# Lambda-specific settings
+LAMBDA_TIMEOUT: 29  # Max for API Gateway
+LAMBDA_MEMORY: 1024  # Full memory for optimal performance
+
+# CloudWatch settings
+LOG_LEVEL: INFO  # Less verbose in production
+METRICS_ENABLED: true
+XRAY_TRACING_ENABLED: true
+CUSTOM_METRICS_NAMESPACE: RIMAC/Appointments
+
+# Performance settings
+COLD_START_OPTIMIZATION: true
+PROVISIONED_CONCURRENCY_ENABLED: ${env:PROVISIONED_CONCURRENCY, 'false'}
+
+# Backup and disaster recovery
+BACKUP_ENABLED: true
+BACKUP_RETENTION_DAYS: 30
+CROSS_REGION_BACKUP: ${env:CROSS_REGION_BACKUP, 'false'}
+
+# Compliance and security
+PCI_COMPLIANCE_MODE: ${env:PCI_COMPLIANCE, 'false'}
+AUDIT_LOGGING_ENABLED: true
+DATA_ENCRYPTION_AT_REST: true
+DATA_ENCRYPTION_IN_TRANSIT: true
+
+# Business settings
+BUSINESS_HOURS_START: "06:00"
+BUSINESS_HOURS_END: "22:00"
+TIMEZONE: "America/Lima"
+MAX_APPOINTMENTS_PER_DAY: 1000

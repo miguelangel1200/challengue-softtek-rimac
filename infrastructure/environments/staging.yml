@@ -1,0 +1,55 @@
+# infrastructure/environments/staging.yml - STAGING ENVIRONMENT VARIABLES
+STAGE: staging
+REGION: ${self:custom.region}
+DYNAMODB_TABLE: ${self:service}-appointments-staging
+SNS_TOPIC_ARN: !Ref AppointmentTopic
+SQS_PE_URL: !Ref AppointmentQueuePE
+SQS_CL_URL: !Ref AppointmentQueueCL
+SQS_CONFIRMATION_URL: !Ref ConfirmationQueue
+SQS_EMAIL_URL: !Ref EmailQueue
+EVENTBRIDGE_BUS_NAME: ${self:service}-staging
+SES_CONFIGURATION_SET: ${self:service}-emails-staging
+
+# RDS Configuration for Staging
+RDS_HOST: ${env:RDS_HOST_STAGING}
+RDS_USERNAME: ${env:RDS_USERNAME_STAGING}
+RDS_PASSWORD: ${env:RDS_PASSWORD_STAGING}
+RDS_PORT: ${env:RDS_PORT_STAGING, '3306'}
+RDS_PE_DATABASE: ${env:RDS_PE_DATABASE_STAGING, 'appointment_pe_staging'}
+RDS_CL_DATABASE: ${env:RDS_CL_DATABASE_STAGING, 'appointment_cl_staging'}
+
+# Security
+JWT_SECRET: ${env:JWT_SECRET_STAGING, 'rimac-secret-2024-staging'}
+
+# Feature flags for staging
+ENABLE_DEBUG_LOGS: true
+ENABLE_DETAILED_MONITORING: true
+ENABLE_EMAIL_NOTIFICATIONS: false  # Disable emails in staging
+RATE_LIMIT_ENABLED: true
+RATE_LIMIT_REQUESTS_PER_MINUTE: 100
+
+# External services
+EXTERNAL_API_BASE_URL: ${env:EXTERNAL_API_STAGING_URL, 'https://api-staging.rimac.com'}
+EXTERNAL_API_KEY: ${env:EXTERNAL_API_KEY_STAGING}
+
+# Monitoring and alerts
+SLACK_WEBHOOK_URL: ${env:SLACK_WEBHOOK_STAGING}
+ERROR_NOTIFICATION_EMAIL: ${env:ERROR_EMAIL_STAGING, 'dev-team@rimac.com'}
+
+# Cache settings
+CACHE_TTL_SECONDS: 300  # 5 minutes in staging
+CACHE_ENABLED: true
+
+# Database connection pool (if using connection pooling)
+DB_CONNECTION_LIMIT: 5
+DB_IDLE_TIMEOUT: 10000
+DB_ACQUIRE_TIMEOUT: 10000
+
+# Lambda-specific settings
+LAMBDA_TIMEOUT: 25  # Slightly less than API Gateway timeout
+LAMBDA_MEMORY: 512  # Less memory in staging to save costs
+
+# CloudWatch settings
+LOG_LEVEL: DEBUG
+METRICS_ENABLED: true
+XRAY_TRACING_ENABLED: true

@@ -1,0 +1,44 @@
+Resources: {}
+
+Outputs:
+  ApiGatewayRestApiId:
+    Description: REST API ID
+    Value: !Ref ApiGatewayRestApi
+    Export:
+      Name: ${self:service}-${self:custom.stage}-api-id
+
+  ApiGatewayRestApiRootResourceId:
+    Description: REST API Root Resource ID
+    Value: !GetAtt ApiGatewayRestApi.RootResourceId
+    Export:
+      Name: ${self:service}-${self:custom.stage}-table-name
+  
+  DynamoDBTableName:
+    Description: DynamoDB Table Name
+    Value: !Ref AppointmentsTable
+    Export: 
+      Name: ${self:service}-${self:custom.stage}-root-resource-id
+
+  SNSTopicArn:
+    Description: SNS Topic ARN
+    Value: !Ref AppointmentTopic
+    Export:
+      Name: ${self:service}-${self:custom.stage}-sns-topic
+  
+  SQSPEUrl:
+    Description: SQS PE Queue URL
+    Value: !Ref AppointmentQueuePE
+    Export:
+      Name: ${self:service}-${self:custom.stage}-sqs-pe-url
+  
+  SQSCLUrl:
+    Description: SQS CL Queue URL
+    Value: !Ref AppointmentQueueCL
+    Export:
+      Name: ${self:service}-${self:custom.stage}-sqs-cl-url
+
+  EventBridgeBusArn:
+    Description: EventBridge Bus ARN
+    Value: !GetAtt AppointmentEventBridge.Arn
+    Export:
+      Name: ${self:service}-${self:custom.stage}-eventbridge-bus

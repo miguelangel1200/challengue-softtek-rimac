@@ -1,0 +1,133 @@
+Resources:
+  # SNS Topic
+  AppointmentTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: ${self:service}-appointments-${self:custom.stage}
+      Tags:
+        - Key: Environment
+          Value: ${self:custom.stage}
+        - Key: service
+          Value: ${self:service}
+  
+  # SNS Subscriptions
+  AppointmentTopicSubscriptionPE:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref AppointmentTopic
+      Protocol: sqs
+      Endpoint: !GetAtt AppointmentQueuePE.Arn
+      FilterPolicy:
+        countryISO: ["PE"]
+  
+  AppointmentTopicSubscriptionCL:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref AppointmentTopic
+      Protocol: sqs
+      Endpoint: !GetAtt AppointmentQueueCL.Arn
+      FilterPolicy:
+        countryISO: ["CL"]
+  
+  # SQS Queues
+  AppointmentQueuePE:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-appointments-pe-${self:custom.stage}
+      VisibilityTimeoutSeconds: 60
+      MessageRetentionPeriod: 1209600 # 14 days
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt AppointmentDLQPE.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Environment
+          Value: ${self:custom.stage}
+        - Key: Service
+          Value: ${self:service}
+        - Key: Country
+          Value: PE
+
+  AppointmentQueueCL:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-appointments-cl-${self:custom.stage}
+      VisibilityTimeoutSeconds: 60
+      MessageRetentionPeriod: 1209600 # 14 days
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt AppointmentDLQCL.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Environment
+          Value: ${self:custom.stage}
+        - Key: Service
+          Value: ${self:service}
+        - Key: Country
+          Value: CL
+  
+  ConfirmationQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-confirmations-${self:custom.stage}
+      VisibilityTimeoutSeconds: 60
+      MessageRetentionPeriod: 1209600 # 14 days
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt ConfirmationDLQ.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Environment
+          Value: ${self:custom.stage}
+        - Key: Service
+          Value: ${self:service}
+  
+  # Dead Letter Queues
+  AppointmentDLQPE:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-appointments-pe-dlq-${self:custom.stage}
+      MessageRetentionPeriod: 1209600 # 14 days
+
+  AppointmentDLQCL:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-appointments-cl-dlq-${self:custom.stage}
+      MessageRetentionPeriod: 1209600 # 14 days
+    
+  ConfirmationDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-confirmations-dlq-${self:custom.stage}
+      MessageRetentionPeriod: 1209600 # 14 days
+  
+  # SQS Queue Políticas para SNS
+  AppointmentQueuePEPolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref AppointmentQueuePE
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt AppointmentQueuePE.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref AppointmentTopic
+  
+  AppointmentQueueCLPolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref AppointmentQueueCL
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt AppointmentQueueCL.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref AppointmentTopic
+  
